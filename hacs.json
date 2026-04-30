@@ -2,5 +2,7 @@
   "name": "CTEK BLE",
   "content_in_root": false,
   "render_readme": true,
-  "country": "NL"
+  "country": "NL",
+  "icon": "icon.png",
+  "logo": "logo.png"
 }
