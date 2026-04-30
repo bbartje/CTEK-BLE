@@ -13,3 +13,7 @@ Home Assistant integration for CTEK Battery Sense BLE sensors.
 2. Install integration
 3. Restart Home Assistant
 4. Add integration via UI
+
+# CTEK BLE
+
+![logo](logo.png)
