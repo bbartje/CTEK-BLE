@@ -3,7 +3,7 @@
   "name": "CTEK BLE Battery Sensors",
   "version": "3.0.0",
   "documentation": "https://github.com/bbartje/ctek-ble",
-  "requirements": ["bleak==0.22.3"],
+  "requirements": [],
   "dependencies": ["bluetooth"],
   "iot_class": "local_push",
   "config_flow": true,
