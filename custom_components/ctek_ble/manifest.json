@@ -1,8 +1,9 @@
 {
   "domain": "ctek_ble",
-  "name": "CTEK BLE Sensors",
-  "version": "1.0.0",
-  "documentation": "",
-  "requirements": ["bleak>=0.21.0"],
+  "name": "CTEK BLE Battery Sensors",
+  "version": "2.0.0",
+  "documentation": "https://github.com/YOUR_USERNAME/ctek_ble",
+  "requirements": [],
+  "dependencies": ["bluetooth"],
   "codeowners": []
 }
