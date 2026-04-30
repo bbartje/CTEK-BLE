@@ -1,75 +1,53 @@
-import logging
-from typing import Any
+"""CTEK BLE sensoren."""
+from __future__ import annotations
 
-from homeassistant.components.sensor import SensorEntity, SensorDeviceClass
+import logging
+
+from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import UnitOfElectricPotential, UnitOfTemperature
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity import DeviceInfo
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DOMAIN, MANUFACTURER, MODEL
-from .coordinator import CtekCoordinator
 from .config_flow import CONF_ADDRESS
+from .device import CTEKDevice
 
 _LOGGER = logging.getLogger(__name__)
 
 
-async def async_setup_entry(hass, entry, async_add_entities):
-    """Stel sensoren in voor een geconfigureerd CTEK-apparaat."""
-    coordinator = CtekCoordinator(hass)
-    await coordinator.async_config_entry_first_refresh()
-
+async def async_setup_entry(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    async_add_entities: AddEntitiesCallback,
+) -> None:
+    device: CTEKDevice = hass.data[DOMAIN][entry.entry_id]
     address = entry.data[CONF_ADDRESS]
-    info = coordinator.data.get(address)
-    name = (info.name if info else None) or address
+    name    = entry.title
 
     entities = [
-        CTEKVoltageSensor(coordinator, address, name),
-        CTEKTemperatureSensor(coordinator, address, name),
-        CTEKChargingSensor(coordinator, address, name),
-        CTEKBatteryStateSensor(coordinator, address, name),
+        CTEKVoltageSensor(device, address, name),
+        CTEKTemperatureSensor(device, address, name),
+        CTEKChargingSensor(device, address, name),
+        CTEKBatteryStateSensor(device, address, name),
     ]
-
     async_add_entities(entities)
 
 
-def _get_raw_manufacturer_data(info) -> bytes | None:
-    """Haal de eerste manufacturer data bytes op uit een BluetoothServiceInfoBleak."""
-    if not info or not info.advertisement:
-        return None
-    mdata = info.advertisement.manufacturer_data
-    if not mdata:
-        return None
-    return list(mdata.values())[0]
+# ---------------------------------------------------------------------------
+# Basisklasse
+# ---------------------------------------------------------------------------
 
+class BaseCTEKSensor(SensorEntity):
+    """Basisklasse: registreert callback op CTEKDevice."""
 
-def parse_data(data: bytes) -> tuple[float | None, int | None]:
-    """
-    Parseer ruwe BLE manufacturer data naar spanning en temperatuur.
+    _attr_has_entity_name = True
+    _attr_should_poll     = False   # push via callback
 
-    Byte 0-1 (little-endian): spanning * 2048
-    Byte 2:                    temperatuur + 17 (offset)
-    """
-    if not data or len(data) < 3:
-        return None, None
-
-    voltage = int.from_bytes(data[0:2], "little") / 2048
-    temperature = data[2] - 17
-    return voltage, temperature
-
-
-class BaseSensor(CoordinatorEntity, SensorEntity):
-    """Basisklasse voor CTEK BLE sensoren."""
-
-    def __init__(
-        self,
-        coordinator: CtekCoordinator,
-        address: str,
-        device_name: str,
-        sensor_key: str,
-    ) -> None:
-        super().__init__(coordinator)
-        self._address = address
-        self._attr_unique_id = f"{address}_{sensor_key}"
+    def __init__(self, device: CTEKDevice, address: str, device_name: str, key: str) -> None:
+        self._device = device
+        self._attr_unique_id = f"{address}_{key}"
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, address)},
             manufacturer=MANUFACTURER,
@@ -77,81 +55,69 @@ class BaseSensor(CoordinatorEntity, SensorEntity):
             name=device_name,
         )
 
-    def _raw_data(self) -> bytes | None:
-        info = self.coordinator.data.get(self._address)
-        return _get_raw_manufacturer_data(info)
+    async def async_added_to_hass(self) -> None:
+        self._device.add_callback(self._handle_update)
+
+    @callback
+    def _handle_update(self) -> None:
+        self._attr_available = self._device.available
+        self.async_write_ha_state()
 
 
-class CTEKVoltageSensor(BaseSensor):
-    """Spanning van de accu in Volt."""
+# ---------------------------------------------------------------------------
+# Concrete sensoren
+# ---------------------------------------------------------------------------
 
-    _attr_device_class = SensorDeviceClass.VOLTAGE
+class CTEKVoltageSensor(BaseCTEKSensor):
+    _attr_device_class               = SensorDeviceClass.VOLTAGE
     _attr_native_unit_of_measurement = UnitOfElectricPotential.VOLT
     _attr_suggested_display_precision = 2
+    _attr_name                       = "Voltage"
 
-    def __init__(self, coordinator, address, name):
-        super().__init__(coordinator, address, name, "voltage")
-        self._attr_name = f"{name} Voltage"
+    def __init__(self, device, address, name):
+        super().__init__(device, address, name, "voltage")
 
     @property
     def native_value(self) -> float | None:
-        raw = self._raw_data()
-        if raw is None:
-            return None
-        v, _ = parse_data(raw)
-        return v
+        return self._device.voltage
 
 
-class CTEKTemperatureSensor(BaseSensor):
-    """Temperatuur van de accu in °C."""
-
-    _attr_device_class = SensorDeviceClass.TEMPERATURE
+class CTEKTemperatureSensor(BaseCTEKSensor):
+    _attr_device_class               = SensorDeviceClass.TEMPERATURE
     _attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
+    _attr_name                       = "Temperature"
 
-    def __init__(self, coordinator, address, name):
-        super().__init__(coordinator, address, name, "temperature")
-        self._attr_name = f"{name} Temperature"
+    def __init__(self, device, address, name):
+        super().__init__(device, address, name, "temperature")
 
     @property
     def native_value(self) -> int | None:
-        raw = self._raw_data()
-        if raw is None:
-            return None
-        _, t = parse_data(raw)
-        return t
+        return self._device.temperature
 
 
-class CTEKChargingSensor(BaseSensor):
-    """Geeft aan of de accu aan het laden is (spanning > 13.6V)."""
+class CTEKChargingSensor(BaseCTEKSensor):
+    _attr_name = "Charging"
 
-    def __init__(self, coordinator, address, name):
-        super().__init__(coordinator, address, name, "charging")
-        self._attr_name = f"{name} Charging"
-
-    @property
-    def native_value(self) -> bool | None:
-        raw = self._raw_data()
-        if raw is None:
-            return None
-        v, _ = parse_data(raw)
-        if v is None:
-            return None
-        return v > 13.6
-
-
-class CTEKBatteryStateSensor(BaseSensor):
-    """Kwalitatieve accustatus op basis van spanning."""
-
-    def __init__(self, coordinator, address, name):
-        super().__init__(coordinator, address, name, "battery_state")
-        self._attr_name = f"{name} Battery State"
+    def __init__(self, device, address, name):
+        super().__init__(device, address, name, "charging")
 
     @property
     def native_value(self) -> str | None:
-        raw = self._raw_data()
-        if raw is None:
+        v = self._device.voltage
+        if v is None:
             return None
-        v, _ = parse_data(raw)
+        return "charging" if v > 13.6 else "idle"
+
+
+class CTEKBatteryStateSensor(BaseCTEKSensor):
+    _attr_name = "Battery State"
+
+    def __init__(self, device, address, name):
+        super().__init__(device, address, name, "battery_state")
+
+    @property
+    def native_value(self) -> str | None:
+        v = self._device.voltage
         if v is None:
             return None
         if v < 11.8:
