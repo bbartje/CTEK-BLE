@@ -1,4 +1,3 @@
-"""CTEK BLE sensoren."""
 from __future__ import annotations
 
 import logging
@@ -26,24 +25,17 @@ async def async_setup_entry(
     address = entry.data[CONF_ADDRESS]
     name    = entry.title
 
-    entities = [
+    async_add_entities([
         CTEKVoltageSensor(device, address, name),
         CTEKTemperatureSensor(device, address, name),
         CTEKChargingSensor(device, address, name),
         CTEKBatteryStateSensor(device, address, name),
-    ]
-    async_add_entities(entities)
+    ])
 
-
-# ---------------------------------------------------------------------------
-# Basisklasse
-# ---------------------------------------------------------------------------
 
 class BaseCTEKSensor(SensorEntity):
-    """Basisklasse: registreert callback op CTEKDevice."""
-
     _attr_has_entity_name = True
-    _attr_should_poll     = False   # push via callback
+    _attr_should_poll     = False
 
     def __init__(self, device: CTEKDevice, address: str, device_name: str, key: str) -> None:
         self._device = device
@@ -63,10 +55,6 @@ class BaseCTEKSensor(SensorEntity):
         self._attr_available = self._device.available
         self.async_write_ha_state()
 
-
-# ---------------------------------------------------------------------------
-# Concrete sensoren
-# ---------------------------------------------------------------------------
 
 class CTEKVoltageSensor(BaseCTEKSensor):
     _attr_device_class               = SensorDeviceClass.VOLTAGE
