@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import logging
 from typing import Any
 
@@ -15,8 +17,6 @@ CONF_ADDRESS = "address"
 
 
 class CtekConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """Config flow voor CTEK BLE integratie."""
-
     VERSION = 1
 
     def __init__(self) -> None:
@@ -27,7 +27,6 @@ class CtekConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     ) -> FlowResult:
         errors: dict[str, str] = {}
 
-        # Scan naar beschikbare CTEK-apparaten via HA bluetooth
         infos = async_discovered_service_info(self.hass)
         self._discovered = {}
         for info in infos:
@@ -35,48 +34,26 @@ class CtekConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             if SERVICE_UUID.lower() in uuids:
                 label = info.name or info.address
                 self._discovered[info.address] = label
-                _LOGGER.debug("Gevonden via scan: %s (%s)", label, info.address)
 
         if user_input is not None:
             address = user_input[CONF_ADDRESS].strip().upper()
-
             if not address:
                 errors[CONF_ADDRESS] = "invalid_address"
             else:
                 await self.async_set_unique_id(address)
                 self._abort_if_unique_id_configured()
-
-                # Naam ophalen uit scan, anders adres gebruiken
                 name = self._discovered.get(address, f"CTEK {address}")
+                return self.async_create_entry(title=name, data={CONF_ADDRESS: address})
 
-                return self.async_create_entry(
-                    title=name,
-                    data={CONF_ADDRESS: address},
-                )
-
-        # Bouw schema: gevonden apparaten als keuze, anders vrij tekstveld
         if self._discovered:
             device_options = {
                 addr: f"{name} ({addr})"
                 for addr, name in self._discovered.items()
             }
-            schema = vol.Schema(
-                {vol.Required(CONF_ADDRESS): vol.In(device_options)}
-            )
-            description = "Selecteer je CTEK Battery Sense."
+            schema = vol.Schema({vol.Required(CONF_ADDRESS): vol.In(device_options)})
         else:
-            # Geen apparaten gevonden via scan — handmatig invoeren
             schema = vol.Schema(
                 {vol.Required(CONF_ADDRESS, default="2C:FC:E4:01:4F:97"): str}
             )
-            description = (
-                "Geen apparaten automatisch gevonden. "
-                "Voer het MAC-adres handmatig in (bijv. 2C:FC:E4:01:4F:97)."
-            )
 
-        return self.async_show_form(
-            step_id="user",
-            data_schema=schema,
-            description_placeholders={"description": description},
-            errors=errors,
-        )
+        return self.async_show_form(step_id="user", data_schema=schema, errors=errors)
