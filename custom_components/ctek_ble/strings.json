@@ -2,8 +2,16 @@
   "config": {
     "step": {
       "user": {
-        "title": "CTEK BLE"
+        "title": "CTEK BLE",
+        "description": "Selecteer het CTEK Battery Sense apparaat dat je wilt toevoegen.",
+        "data": {
+          "address": "Apparaat"
+        }
       }
+    },
+    "abort": {
+      "no_devices_found": "Geen CTEK BLE-apparaten gevonden. Zorg dat Bluetooth actief is en het apparaat in de buurt is.",
+      "already_configured": "Dit apparaat is al geconfigureerd."
     }
   }
 }
