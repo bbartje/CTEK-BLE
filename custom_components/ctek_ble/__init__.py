@@ -1,4 +1,3 @@
-"""CTEK BLE integratie voor Home Assistant."""
 from __future__ import annotations
 
 import logging
@@ -20,7 +19,6 @@ PLATFORMS = ["sensor"]
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     address = entry.data[CONF_ADDRESS]
 
-    # Vraag HA om het BLEDevice-object voor dit adres
     ble_device = async_ble_device_from_address(hass, address, connectable=True)
     if ble_device is None:
         raise ConfigEntryNotReady(
