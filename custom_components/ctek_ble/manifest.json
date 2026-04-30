@@ -1,0 +1,8 @@
+{
+  "domain": "ctek_ble",
+  "name": "CTEK BLE Sensors",
+  "version": "1.0.0",
+  "documentation": "",
+  "requirements": ["bleak>=0.21.0"],
+  "codeowners": []
+}
