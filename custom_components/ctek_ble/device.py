@@ -87,7 +87,16 @@ class CTEKDevice:
                 )
 
                 _LOGGER.info("Verbonden met CTEK %s", self._address)
+
+                # Probeer te paren voor encrypted characteristics
+                try:
+                    paired = await client.pair()
+                    _LOGGER.info("Pairing resultaat: %s", paired)
+                except Exception as pair_err:
+                    _LOGGER.warning("Pairing niet gelukt (wordt genegeerd): %s", pair_err)
+
                 await client.start_notify(CHAR_UUID, self._on_notify)
+                _LOGGER.info("Notify gestart op %s", CHAR_UUID)
 
                 while client.is_connected:
                     await asyncio.sleep(5)
