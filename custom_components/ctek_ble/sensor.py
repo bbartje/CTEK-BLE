@@ -1,54 +1,137 @@
-import asyncio
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.const import UnitOfElectricPotential, UnitOfTemperature
-from .const import DOMAIN
-from .ble import discover_devices
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-async def async_setup_platform(hass, config, async_add_entities, discovery_info=None):
-    devices = await discover_devices()
+from .const import DOMAIN, CHAR_UUID, MANUFACTURER, MODEL
+from .coordinator import CtekCoordinator
+
+
+async def async_setup_entry(hass, entry, async_add_entities):
+    coordinator = CtekCoordinator(hass)
+    await coordinator.async_config_entry_first_refresh()
+
     entities = []
 
-    for dev in devices:
-        hass.loop.create_task(dev.run())
+    for address, info in coordinator.data.items():
+        name = info.name or address
 
-        entities.append(CTEKVoltageSensor(dev))
-        entities.append(CTEKTemperatureSensor(dev))
+        entities.append(CTEKVoltageSensor(coordinator, address, name))
+        entities.append(CTEKTemperatureSensor(coordinator, address, name))
+        entities.append(CTEKChargingSensor(coordinator, address, name))
+        entities.append(CTEKBatteryStateSensor(coordinator, address, name))
 
     async_add_entities(entities)
 
 
-class BaseCTEKSensor(SensorEntity):
-    def __init__(self, device):
-        self._device = device
-        self._attr_name = f"{device.name}"
+def parse_data(data: bytes):
+    if len(data) < 3:
+        return None, None
 
-        device.add_callback(self._update)
-
-    def _update(self):
-        self.schedule_update_ha_state()
+    voltage = int.from_bytes(data[0:2], "little") / 2048
+    temperature = data[2] - 17
+    return voltage, temperature
 
 
-class CTEKVoltageSensor(BaseCTEKSensor):
+class BaseSensor(CoordinatorEntity, SensorEntity):
+    def __init__(self, coordinator, address, name):
+        super().__init__(coordinator)
+        self._address = address
+        self._name = name
+
+        self._attr_device_info = {
+            "identifiers": {(DOMAIN, address)},
+            "manufacturer": MANUFACTURER,
+            "model": MODEL,
+            "name": name,
+        }
+
+
+class CTEKVoltageSensor(BaseSensor):
     _attr_unit_of_measurement = UnitOfElectricPotential.VOLT
     _attr_device_class = "voltage"
 
-    def __init__(self, device):
-        super().__init__(device)
-        self._attr_name = f"{device.name} Voltage"
+    def __init__(self, coordinator, address, name):
+        super().__init__(coordinator, address, name)
+        self._attr_name = f"{name} Voltage"
 
     @property
     def state(self):
-        return self._device.voltage
+        info = self.coordinator.data.get(self._address)
+        if not info or not info.advertisement:
+            return None
+
+        data = info.advertisement.manufacturer_data
+        if not data:
+            return None
+
+        raw = list(data.values())[0]
+        v, _ = parse_data(raw)
+        return v
 
 
-class CTEKTemperatureSensor(BaseCTEKSensor):
+class CTEKTemperatureSensor(BaseSensor):
     _attr_unit_of_measurement = UnitOfTemperature.CELSIUS
     _attr_device_class = "temperature"
 
-    def __init__(self, device):
-        super().__init__(device)
-        self._attr_name = f"{device.name} Temperature"
+    def __init__(self, coordinator, address, name):
+        super().__init__(coordinator, address, name)
+        self._attr_name = f"{name} Temperature"
 
     @property
     def state(self):
-        return self._device.temperature
+        info = self.coordinator.data.get(self._address)
+        if not info or not info.advertisement:
+            return None
+
+        data = info.advertisement.manufacturer_data
+        if not data:
+            return None
+
+        raw = list(data.values())[0]
+        _, t = parse_data(raw)
+        return t
+
+
+class CTEKChargingSensor(BaseSensor):
+    def __init__(self, coordinator, address, name):
+        super().__init__(coordinator, address, name)
+        self._attr_name = f"{name} Charging"
+
+    @property
+    def state(self):
+        info = self.coordinator.data.get(self._address)
+        if not info or not info.advertisement:
+            return None
+
+        raw = list(info.advertisement.manufacturer_data.values())[0]
+        v, _ = parse_data(raw)
+
+        if v is None:
+            return None
+
+        return v > 13.6
+
+
+class CTEKBatteryStateSensor(BaseSensor):
+    def __init__(self, coordinator, address, name):
+        super().__init__(coordinator, address, name)
+        self._attr_name = f"{name} Battery State"
+
+    @property
+    def state(self):
+        info = self.coordinator.data.get(self._address)
+        if not info or not info.advertisement:
+            return None
+
+        raw = list(info.advertisement.manufacturer_data.values())[0]
+        v, _ = parse_data(raw)
+
+        if v is None:
+            return None
+
+        if v < 11.8:
+            return "critical"
+        elif v < 12.2:
+            return "low"
+        else:
+            return "ok"
