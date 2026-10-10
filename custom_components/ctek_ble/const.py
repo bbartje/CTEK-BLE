@@ -1,13 +1,14 @@
 DOMAIN = "ctek_ble"
 
-# The original project hard-coded a single UUID pair, but CTEK Battery Sense modules
-# commonly advertise under multiple valid GATT profile combinations and may be seen
-# through Home Assistant Bluetooth proxies/gateways. Keep the legacy values for
-# backward compatibility while allowing a broader set of valid identifiers.
+# Advertisements are only useful for discovery. Reliable battery voltage and
+# temperature values require an active GATT connection to the CTEK service. The
+# Home Assistant integration keeps the known CTEK UUIDs here to authenticate the
+# device and subscribe to live measurement data.
 SERVICE_UUID = "812ca8ed-a177-4d74-aefa-70098c5416af"
 CHAR_UUID = "a337b4eb-2544-4f94-87c9-f7732e5fe250"
 TEMPERATURE_CHARACTERISTIC_UUID = "b5634099-97c4-4f37-adf3-771246e77754"
 UNLOCK_CHARACTERISTIC_UUID = "a1d67c01-fe3f-01bf-7d49-7dbdc43b02a6"
+RANGE_CHARACTERISTIC_UUID = "418d1817-f516-45f1-ab64-433ae596613d"
 
 SERVICE_UUIDS = [
     SERVICE_UUID,

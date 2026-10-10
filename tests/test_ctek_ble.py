@@ -118,6 +118,22 @@ def test_parse_temperature_uses_signed_half_degrees_and_app_rounding():
     assert parse_temperature(b"") is None
 
 
+def test_ctek_gatt_uuids_match_reverse_engineering_findings():
+    from custom_components.ctek_ble.const import (
+        CHAR_UUID,
+        RANGE_CHARACTERISTIC_UUID,
+        SERVICE_UUID,
+        TEMPERATURE_CHARACTERISTIC_UUID,
+        UNLOCK_CHARACTERISTIC_UUID,
+    )
+
+    assert SERVICE_UUID == "812ca8ed-a177-4d74-aefa-70098c5416af"
+    assert CHAR_UUID == "a337b4eb-2544-4f94-87c9-f7732e5fe250"
+    assert TEMPERATURE_CHARACTERISTIC_UUID == "b5634099-97c4-4f37-adf3-771246e77754"
+    assert UNLOCK_CHARACTERISTIC_UUID == "a1d67c01-fe3f-01bf-7d49-7dbdc43b02a6"
+    assert RANGE_CHARACTERISTIC_UUID == "418d1817-f516-45f1-ab64-433ae596613d"
+
+
 def test_sender_id_unlock_payload_matches_app_handshake():
     assert normalize_sender_id(" 0123456789abcdef ") == "0123456789ABCDEF"
     assert build_sender_unlock_payload("0123456789ABCDEF").hex() == (
