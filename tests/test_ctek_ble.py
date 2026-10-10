@@ -104,3 +104,33 @@ def test_start_notify_failure_includes_discovered_gatt_details():
     assert "0000fff4-0000-1000-8000-00805f9b34fb" in message
     assert "service-uuid" in message
     assert "characteristic-uuid [notify,read]" in message
+
+
+def test_start_notify_failure_reads_bleak_service_mapping_values():
+    device = CTEKDevice(
+        SimpleNamespace(address="AA:BB:CC:DD:EE:FF"), "0123456789ABCDEF"
+    )
+
+    class RejectingClient:
+        services = SimpleNamespace(
+            services={
+                1: SimpleNamespace(
+                    uuid="service-uuid",
+                    characteristics=[
+                        SimpleNamespace(
+                            uuid="characteristic-uuid", properties=["notify"]
+                        )
+                    ],
+                )
+            }
+        )
+
+        async def start_notify(self, uuid, callback):
+            raise RuntimeError("not supported")
+
+    with pytest.raises(RuntimeError) as error:
+        asyncio.run(device._start_notify(RejectingClient()))
+
+    message = str(error.value)
+    assert "service-uuid" in message
+    assert "characteristic-uuid [notify]" in message

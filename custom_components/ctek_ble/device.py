@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Mapping
 from typing import Callable
 
 from bleak import BleakClient
@@ -79,6 +80,8 @@ class CTEKDevice:
             discovered = "niet beschikbaar"
         else:
             services = getattr(service_collection, "services", service_collection)
+            if isinstance(services, Mapping):
+                services = services.values()
             try:
                 services = list(services)
             except TypeError:
