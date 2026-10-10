@@ -1,13 +1,13 @@
 import asyncio
 from bleak import BleakClient, BleakScanner
-from .const import SERVICE_UUID, CHAR_UUID
+from .const import SERVICE_UUIDS, CHAR_UUID, is_ctek_device
+from .protocol import parse_data
 
 class CTEKDevice:
     def __init__(self, address, name):
         self.address = address
         self.name = name or address
         self.voltage = None
-        self.temperature = None
         self._callbacks = []
 
     def add_callback(self, cb):
@@ -18,10 +18,10 @@ class CTEKDevice:
             cb()
 
     def _parse(self, data: bytearray):
-        if len(data) < 3:
+        voltage = parse_data(data)
+        if voltage is None:
             return
-        self.voltage = int.from_bytes(data[0:2], "little") / 2048
-        self.temperature = data[2] - 17
+        self.voltage = voltage
         self._notify()
 
     async def run(self):
@@ -43,7 +43,13 @@ async def discover_devices():
     result = []
 
     for d in devices:
-        if SERVICE_UUID.lower() in [s.lower() for s in d.metadata.get("uuids", [])]:
+        details = getattr(d, "details", {}) or {}
+        metadata = getattr(d, "metadata", {}) or {}
+        service_uuids = [
+            str(uuid)
+            for uuid in (details.get("uuids") or metadata.get("uuids", []))
+        ]
+        if is_ctek_device(d.name, service_uuids):
             result.append(CTEKDevice(d.address, d.name))
 
     return result

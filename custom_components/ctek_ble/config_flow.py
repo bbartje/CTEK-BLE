@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any
 
 import voluptuous as vol
@@ -9,7 +10,7 @@ from homeassistant import config_entries
 from homeassistant.components.bluetooth import async_discovered_service_info
 from homeassistant.data_entry_flow import FlowResult
 
-from .const import DOMAIN, SERVICE_UUID
+from .const import DOMAIN, is_ctek_device
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -30,14 +31,13 @@ class CtekConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         infos = async_discovered_service_info(self.hass)
         self._discovered = {}
         for info in infos:
-            uuids = [s.lower() for s in (info.service_uuids or [])]
-            if SERVICE_UUID.lower() in uuids:
+            if is_ctek_device(info.name, info.service_uuids):
                 label = info.name or info.address
                 self._discovered[info.address] = label
 
         if user_input is not None:
             address = user_input[CONF_ADDRESS].strip().upper()
-            if not address:
+            if not re.fullmatch(r"([0-9A-F]{2}:){5}[0-9A-F]{2}", address):
                 errors[CONF_ADDRESS] = "invalid_address"
             else:
                 await self.async_set_unique_id(address)

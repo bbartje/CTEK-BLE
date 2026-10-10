@@ -1,15 +1,13 @@
 from __future__ import annotations
 
 import logging
-
-from homeassistant.components.bluetooth import async_ble_device_from_address
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import ConfigEntryNotReady
+from typing import TYPE_CHECKING
 
 from .const import DOMAIN
-from .config_flow import CONF_ADDRESS
-from .device import CTEKDevice
+
+if TYPE_CHECKING:
+    from homeassistant.config_entries import ConfigEntry
+    from homeassistant.core import HomeAssistant
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -17,6 +15,12 @@ PLATFORMS = ["sensor"]
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    from homeassistant.components.bluetooth import async_ble_device_from_address
+    from homeassistant.exceptions import ConfigEntryNotReady
+
+    from .config_flow import CONF_ADDRESS
+    from .device import CTEKDevice
+
     address = entry.data[CONF_ADDRESS]
 
     ble_device = async_ble_device_from_address(hass, address, connectable=True)
@@ -39,7 +43,16 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
 
     if unload_ok:
-        device: CTEKDevice = hass.data[DOMAIN].pop(entry.entry_id)
-        device.stop()
+        domain_data = hass.data.get(DOMAIN)
+        if domain_data and entry.entry_id in domain_data:
+            from .device import CTEKDevice
+
+            device: CTEKDevice | None = domain_data.pop(entry.entry_id)
+            if device is not None:
+                device.stop()
+        if domain_data:
+            hass.data[DOMAIN] = domain_data
+        else:
+            hass.data.pop(DOMAIN, None)
 
     return unload_ok

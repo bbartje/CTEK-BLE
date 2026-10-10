@@ -4,15 +4,15 @@ Home Assistant integration for CTEK Battery Sense BLE sensors.
 
 ## Features
 - Voltage
-- Temperature
 - Charging status
 - Battery state
 
 ## Installation
-1. Add this repo to HACS
-2. Install integration
-3. Restart Home Assistant
-4. Add integration via UI
+1. In HACS, add `bbartje/CTEK-BLE` as a custom integration repository.
+2. Install or update **CTEK BLE Battery Sensors**.
+3. Restart Home Assistant, then add **CTEK BLE Battery Sensors** from Settings > Devices & services.
+
+This test release has not yet been verified against a live Battery Sense module. Please report the Home Assistant version, Bluetooth adapter or proxy model, integration logs, and whether the device appears during setup.
 
 # CTEK BLE
 

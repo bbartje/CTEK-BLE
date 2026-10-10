@@ -5,7 +5,7 @@ from homeassistant.components.bluetooth import async_discovered_service_info
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.core import HomeAssistant
 
-from .const import DOMAIN, SERVICE_UUID
+from .const import DOMAIN, is_ctek_device
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -28,8 +28,7 @@ class CtekCoordinator(DataUpdateCoordinator):
         infos = async_discovered_service_info(self.hass)
 
         for info in infos:
-            uuids = [s.lower() for s in (info.service_uuids or [])]
-            if SERVICE_UUID.lower() in uuids:
+            if is_ctek_device(info.name, info.service_uuids):
                 self.devices[info.address] = info
                 _LOGGER.debug(
                     "CTEK apparaat gevonden: %s (%s)", info.name, info.address

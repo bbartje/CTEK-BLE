@@ -8,22 +8,12 @@ from bleak import BleakClient
 from bleak.backends.device import BLEDevice
 from bleak_retry_connector import establish_connection
 
-from .const import CHAR_UUID
+from .const import CHARACTERISTIC_UUIDS, CHAR_UUID, normalize_uuid
+from .protocol import parse_data
 
 _LOGGER = logging.getLogger(__name__)
 
 RECONNECT_INTERVAL = 15
-
-
-def parse_data(data: bytes | bytearray) -> tuple[float | None, int | None]:
-    if not data or len(data) < 3:
-        _LOGGER.debug("Te korte payload (%d bytes): %s", len(data), data.hex())
-        return None, None
-
-    voltage     = int.from_bytes(data[0:2], "little") / 2048
-    temperature = data[2] - 17
-    _LOGGER.debug("Parsed: %.2fV  %d°C  (raw: %s)", voltage, temperature, data.hex())
-    return voltage, temperature
 
 
 class CTEKDevice:
@@ -32,7 +22,6 @@ class CTEKDevice:
         self._address     = ble_device.address
 
         self.voltage:     float | None = None
-        self.temperature: int   | None = None
         self.available:   bool         = False
 
         self._callbacks: list[Callable] = []
@@ -40,6 +29,10 @@ class CTEKDevice:
 
     def add_callback(self, cb: Callable) -> None:
         self._callbacks.append(cb)
+        try:
+            cb()
+        except Exception:
+            _LOGGER.exception("Fout bij initialisatie van callback")
 
     def start(self) -> None:
         if self._task is None or self._task.done():
@@ -48,6 +41,7 @@ class CTEKDevice:
     def stop(self) -> None:
         if self._task and not self._task.done():
             self._task.cancel()
+        self._task = None
 
     def update_ble_device(self, ble_device: BLEDevice) -> None:
         self._ble_device = ble_device
@@ -59,12 +53,28 @@ class CTEKDevice:
             except Exception:
                 _LOGGER.exception("Fout in callback")
 
+    async def _start_notify(self, client: BleakClient) -> None:
+        preferred = [normalize_uuid(uuid) for uuid in CHARACTERISTIC_UUIDS if uuid]
+        preferred = [uuid for uuid in preferred if uuid]
+        legacy = normalize_uuid(CHAR_UUID)
+        if legacy and legacy not in preferred:
+            preferred.insert(0, legacy)
+
+        for uuid in preferred:
+            try:
+                await client.start_notify(uuid, self._on_notify)
+                _LOGGER.info("Notify gestart op %s", uuid)
+                return
+            except Exception as err:
+                _LOGGER.debug("Notify op %s niet beschikbaar: %s", uuid, err)
+
+        raise RuntimeError("Geen ondersteunde notify-characteristic gevonden voor CTEK Battery Sense")
+
     def _on_notify(self, _sender: int, data: bytearray) -> None:
-        v, t = parse_data(data)
-        if v is not None:
-            self.voltage     = round(v, 2)
-            self.temperature = t
-            self.available   = True
+        voltage = parse_data(data)
+        if voltage is not None:
+            self.voltage = round(voltage, 2)
+            self.available = True
             self._notify_callbacks()
 
     def _on_disconnect(self, _client: BleakClient) -> None:
@@ -95,8 +105,7 @@ class CTEKDevice:
                 except Exception as pair_err:
                     _LOGGER.warning("Pairing niet gelukt (wordt genegeerd): %s", pair_err)
 
-                await client.start_notify(CHAR_UUID, self._on_notify)
-                _LOGGER.info("Notify gestart op %s", CHAR_UUID)
+                await self._start_notify(client)
 
                 while client.is_connected:
                     await asyncio.sleep(5)
