@@ -5,13 +5,31 @@
         "title": "CTEK BLE",
         "description": "Selecteer het CTEK Battery Sense apparaat dat je wilt toevoegen.",
         "data": {
-          "address": "Apparaat"
+          "address": "Apparaat",
+          "sender_id": "Sender ID (16 tekens)"
         }
       }
+    },
+    "error": {
+      "invalid_sender_id": "Voer de Sender ID van 16 tekens van de sticker in."
     },
     "abort": {
       "no_devices_found": "Geen CTEK BLE-apparaten gevonden. Zorg dat Bluetooth actief is en het apparaat in de buurt is.",
       "already_configured": "Dit apparaat is al geconfigureerd."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "CTEK Battery Sense",
+        "description": "Voer de Sender ID van 16 tekens in die op de sticker staat.",
+        "data": {
+          "sender_id": "Sender ID"
+        }
+      }
+    },
+    "error": {
+      "invalid_sender_id": "Voer de Sender ID van 16 tekens van de sticker in."
     }
   }
 }

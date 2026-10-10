@@ -8,8 +8,13 @@ from bleak import BleakClient
 from bleak.backends.device import BLEDevice
 from bleak_retry_connector import establish_connection
 
-from .const import CHARACTERISTIC_UUIDS, CHAR_UUID, normalize_uuid
-from .protocol import parse_data
+from .const import (
+    CHARACTERISTIC_UUIDS,
+    CHAR_UUID,
+    UNLOCK_CHARACTERISTIC_UUID,
+    normalize_uuid,
+)
+from .protocol import build_sender_unlock_payload, normalize_sender_id, parse_data
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -17,9 +22,10 @@ RECONNECT_INTERVAL = 15
 
 
 class CTEKDevice:
-    def __init__(self, ble_device: BLEDevice) -> None:
+    def __init__(self, ble_device: BLEDevice, sender_id: str) -> None:
         self._ble_device  = ble_device
         self._address     = ble_device.address
+        self._sender_id   = normalize_sender_id(sender_id)
 
         self.voltage:     float | None = None
         self.available:   bool         = False
@@ -68,7 +74,39 @@ class CTEKDevice:
             except Exception as err:
                 _LOGGER.debug("Notify op %s niet beschikbaar: %s", uuid, err)
 
-        raise RuntimeError("Geen ondersteunde notify-characteristic gevonden voor CTEK Battery Sense")
+        service_collection = getattr(client, "services", None)
+        if service_collection is None:
+            discovered = "niet beschikbaar"
+        else:
+            services = getattr(service_collection, "services", service_collection)
+            try:
+                services = list(services)
+            except TypeError:
+                services = []
+
+            if not services:
+                discovered = "geen services ontdekt"
+            else:
+                service_details = []
+                for service in services:
+                    characteristics = []
+                    for characteristic in getattr(service, "characteristics", []) or []:
+                        properties = ",".join(
+                            sorted(str(prop) for prop in getattr(characteristic, "properties", []) or [])
+                        )
+                        characteristics.append(
+                            f"{getattr(characteristic, 'uuid', 'onbekend')} [{properties}]"
+                        )
+                    service_details.append(
+                        f"{getattr(service, 'uuid', 'onbekend')}: "
+                        f"{', '.join(characteristics) if characteristics else 'geen characteristics'}"
+                    )
+                discovered = "; ".join(service_details)
+
+        raise RuntimeError(
+            "Geen ondersteunde notify-characteristic gevonden voor CTEK Battery Sense "
+            f"(geprobeerd: {', '.join(preferred)}; ontdekt GATT: {discovered})"
+        )
 
     def _on_notify(self, _sender: int, data: bytearray) -> None:
         voltage = parse_data(data)
@@ -81,6 +119,13 @@ class CTEKDevice:
         _LOGGER.info("CTEK %s verbroken", self._address)
         self.available = False
         self._notify_callbacks()
+
+    async def _authenticate(self, client: BleakClient) -> None:
+        payload = build_sender_unlock_payload(self._sender_id)
+        await client.write_gatt_char(
+            UNLOCK_CHARACTERISTIC_UUID, payload, response=True
+        )
+        _LOGGER.debug("Sender ID-unlockpayload geschreven voor CTEK %s", self._address)
 
     async def _run(self) -> None:
         while True:
@@ -98,13 +143,7 @@ class CTEKDevice:
 
                 _LOGGER.info("Verbonden met CTEK %s", self._address)
 
-                # Probeer te paren voor encrypted characteristics
-                try:
-                    paired = await client.pair()
-                    _LOGGER.info("Pairing resultaat: %s", paired)
-                except Exception as pair_err:
-                    _LOGGER.warning("Pairing niet gelukt (wordt genegeerd): %s", pair_err)
-
+                await self._authenticate(client)
                 await self._start_notify(client)
 
                 while client.is_connected:

@@ -18,10 +18,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     from homeassistant.components.bluetooth import async_ble_device_from_address
     from homeassistant.exceptions import ConfigEntryNotReady
 
-    from .config_flow import CONF_ADDRESS
+    from .config_flow import CONF_ADDRESS, CONF_SENDER_ID
     from .device import CTEKDevice
 
     address = entry.data[CONF_ADDRESS]
+    sender_id = entry.options.get(
+        CONF_SENDER_ID, entry.data.get(CONF_SENDER_ID)
+    )
+    if not sender_id:
+        raise ConfigEntryNotReady(
+            "Sender ID ontbreekt. Open de integratieopties en voer de code van de sticker in."
+        )
 
     ble_device = async_ble_device_from_address(hass, address, connectable=True)
     if ble_device is None:
@@ -30,13 +37,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             "Zorg dat het apparaat in bereik is en herstart."
         )
 
-    device = CTEKDevice(ble_device)
+    device = CTEKDevice(ble_device, sender_id)
     device.start()
+    entry.async_on_unload(entry.add_update_listener(async_reload_entry))
 
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = device
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
+
+
+async def async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    await hass.config_entries.async_reload(entry.entry_id)
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
