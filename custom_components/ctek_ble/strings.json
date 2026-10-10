@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "CTEK BLE",
-        "description": "Selecteer het CTEK Battery Sense apparaat dat je wilt toevoegen.",
+        "description": "Selecteer de CTEK Battery Sense en voer de Sender ID in. Lukt verbinden niet? Onderbreek de voeding van de CTEK kort en probeer direct daarna opnieuw toe te voegen.",
         "data": {
           "address": "Apparaat",
           "sender_id": "Sender ID (16 tekens)"
@@ -22,7 +22,7 @@
     "step": {
       "init": {
         "title": "CTEK Battery Sense",
-        "description": "Voer de Sender ID van 16 tekens in die op de sticker staat.",
+        "description": "Voer de Sender ID van 16 tekens in die op de sticker staat. Lukt verbinden niet? Onderbreek de voeding van de CTEK kort en sla de Sender ID direct daarna opnieuw op.",
         "data": {
           "sender_id": "Sender ID"
         }

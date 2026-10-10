@@ -18,6 +18,8 @@ This test release has not yet been verified against a live Battery Sense module.
 
 The first setup asks for the 16-character Sender ID printed on the device sticker. The integration uses it for the device's GATT unlock handshake before subscribing to notifications; it is not used to decode the voltage payload. Existing entries can set or correct the ID in the integration options.
 
+If the CTEK only accepts a connection briefly after a power cycle, interrupt its power briefly immediately before adding it or saving the Sender ID, then retry at once. This is a troubleshooting step based on observed device behavior; it has not been established whether every reconnect requires a power cycle.
+
 When using an ESPHome Bluetooth proxy, make sure it is online and the CTEK device is visible to Home Assistant through the Bluetooth integration. If notify setup fails, the integration log now includes the GATT service and characteristic UUIDs and their properties. Include that complete message, the ESPHome device model and version, and the Home Assistant version when reporting the issue.
 
 # CTEK BLE
