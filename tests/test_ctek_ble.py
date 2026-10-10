@@ -1,8 +1,85 @@
 import asyncio
+import sys
+import types
 from types import SimpleNamespace
 
 import pytest
 
+voluptuous = types.ModuleType("voluptuous")
+voluptuous.Required = lambda *args, **kwargs: args[0] if args else kwargs
+voluptuous.Optional = lambda *args, **kwargs: args[0] if args else kwargs
+voluptuous.In = lambda *args, **kwargs: args[0] if args else kwargs
+voluptuous.Schema = lambda *args, **kwargs: args[0] if args else kwargs
+sys.modules.setdefault("voluptuous", voluptuous)
+
+# Minimal HA stubs so the config-flow can be imported in a plain test environment.
+homeassistant = types.ModuleType("homeassistant")
+homeassistant.__path__ = []
+config_entries = types.ModuleType("homeassistant.config_entries")
+
+
+class ConfigFlow:
+    VERSION = 1
+
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__()
+
+    def __init__(self, *args, **kwargs):
+        self.hass = None
+
+    def _abort_if_unique_id_configured(self):
+        return None
+
+    def async_show_form(self, **kwargs):
+        return {"type": "form", **kwargs}
+
+    def async_create_entry(self, **kwargs):
+        return {"type": "create_entry", **kwargs}
+
+
+class OptionsFlow:
+    def __init__(self, config_entry=None):
+        self.config_entry = config_entry
+
+    def async_show_form(self, **kwargs):
+        return {"type": "form", **kwargs}
+
+    def async_create_entry(self, **kwargs):
+        return {"type": "create_entry", **kwargs}
+
+
+config_entries.ConfigFlow = ConfigFlow
+config_entries.OptionsFlow = OptionsFlow
+config_entries.ConfigEntry = type("ConfigEntry", (), {})
+homeassistant.config_entries = config_entries
+
+components = types.ModuleType("homeassistant.components")
+bluetooth = types.ModuleType("homeassistant.components.bluetooth")
+bluetooth.async_discovered_service_info = lambda hass: []
+components.bluetooth = bluetooth
+homeassistant.components = components
+
+core = types.ModuleType("homeassistant.core")
+core.callback = lambda func: func
+homeassistant.core = core
+
+data_entry_flow = types.ModuleType("homeassistant.data_entry_flow")
+data_entry_flow.FlowResult = dict
+homeassistant.data_entry_flow = data_entry_flow
+
+exceptions = types.ModuleType("homeassistant.exceptions")
+exceptions.ConfigEntryNotReady = type("ConfigEntryNotReady", (Exception,), {})
+homeassistant.exceptions = exceptions
+
+sys.modules.setdefault("homeassistant", homeassistant)
+sys.modules.setdefault("homeassistant.config_entries", config_entries)
+sys.modules.setdefault("homeassistant.components", components)
+sys.modules.setdefault("homeassistant.components.bluetooth", bluetooth)
+sys.modules.setdefault("homeassistant.core", core)
+sys.modules.setdefault("homeassistant.data_entry_flow", data_entry_flow)
+sys.modules.setdefault("homeassistant.exceptions", exceptions)
+
+from custom_components.ctek_ble.config_flow import CtekOptionsFlow
 from custom_components.ctek_ble.const import is_ctek_device, normalize_uuid
 from custom_components.ctek_ble.device import CTEKDevice
 from custom_components.ctek_ble.const import UNLOCK_CHARACTERISTIC_UUID
@@ -184,3 +261,13 @@ def test_start_notify_failure_reads_bleak_service_mapping_values():
     message = str(error.value)
     assert "service-uuid" in message
     assert "characteristic-uuid [notify]" in message
+
+
+def test_options_flow_handles_missing_config_entry_data_gracefully():
+    entry = SimpleNamespace(data=None, options=None)
+    flow = CtekOptionsFlow(entry)
+
+    result = asyncio.run(flow.async_step_init())
+
+    assert result["type"] == "form"
+    assert result["step_id"] == "init"

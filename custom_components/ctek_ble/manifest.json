@@ -1,7 +1,7 @@
 {
   "domain": "ctek_ble",
   "name": "CTEK BLE Battery Sensors",
-  "version": "3.3.0",
+  "version": "3.3.1",
   "documentation": "https://github.com/bbartje/ctek-ble",
   "requirements": ["bleak-retry-connector>=3.0.0"],
   "dependencies": ["bluetooth"],

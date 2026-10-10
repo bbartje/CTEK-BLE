@@ -21,10 +21,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     from .config_flow import CONF_ADDRESS, CONF_SENDER_ID
     from .device import CTEKDevice
 
-    address = entry.data[CONF_ADDRESS]
-    sender_id = entry.options.get(
-        CONF_SENDER_ID, entry.data.get(CONF_SENDER_ID)
-    )
+    data = entry.data or {}
+    options = entry.options or {}
+    address = data.get(CONF_ADDRESS)
+    sender_id = options.get(CONF_SENDER_ID) or data.get(CONF_SENDER_ID)
+    if not address:
+        raise ConfigEntryNotReady(
+            "Bluetooth-adres ontbreekt in de configuratie van de integratie."
+        )
     if not sender_id:
         raise ConfigEntryNotReady(
             "Sender ID ontbreekt. Open de integratieopties en voer de code van de sticker in."

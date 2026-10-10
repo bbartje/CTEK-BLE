@@ -98,8 +98,12 @@ class CtekOptionsFlow(config_entries.OptionsFlow):
                     title="", data={CONF_SENDER_ID: sender_id}
                 )
 
-        current_sender_id = self.config_entry.options.get(
-            CONF_SENDER_ID, self.config_entry.data.get(CONF_SENDER_ID, "")
+        options = self.config_entry.options or {}
+        data = self.config_entry.data or {}
+        current_sender_id = str(
+            options.get(CONF_SENDER_ID)
+            or data.get(CONF_SENDER_ID)
+            or ""
         )
         schema = vol.Schema(
             {
