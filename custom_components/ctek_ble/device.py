@@ -12,14 +12,22 @@ from bleak_retry_connector import establish_connection
 from .const import (
     CHARACTERISTIC_UUIDS,
     CHAR_UUID,
+    TEMPERATURE_CHARACTERISTIC_UUID,
     UNLOCK_CHARACTERISTIC_UUID,
     normalize_uuid,
 )
-from .protocol import build_sender_unlock_payload, normalize_sender_id, parse_data
+from .protocol import (
+    build_sender_unlock_payload,
+    normalize_sender_id,
+    parse_temperature,
+    parse_voltage_sample,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
 RECONNECT_INTERVAL = 15
+TEMPERATURE_READ_INTERVAL = 30
+CONNECTION_CHECK_INTERVAL = 5
 
 
 class CTEKDevice:
@@ -29,6 +37,8 @@ class CTEKDevice:
         self._sender_id   = normalize_sender_id(sender_id)
 
         self.voltage:     float | None = None
+        self.voltage_auxiliary: int | None = None
+        self.temperature: int | None = None
         self.available:   bool         = False
 
         self._callbacks: list[Callable] = []
@@ -112,11 +122,36 @@ class CTEKDevice:
         )
 
     def _on_notify(self, _sender: int, data: bytearray) -> None:
-        voltage = parse_data(data)
-        if voltage is not None:
+        sample = parse_voltage_sample(data)
+        if sample is not None:
+            voltage, self.voltage_auxiliary = sample
             self.voltage = round(voltage, 2)
             self.available = True
             self._notify_callbacks()
+
+    async def _read_temperature(self, client: BleakClient) -> None:
+        try:
+            data = await client.read_gatt_char(TEMPERATURE_CHARACTERISTIC_UUID)
+        except Exception as err:
+            _LOGGER.debug("Temperatuur uitlezen mislukt op %s: %s", self._address, err)
+            return
+
+        temperature = parse_temperature(data)
+        if temperature is not None:
+            self.temperature = temperature
+            self.available = True
+            self._notify_callbacks()
+
+    async def _start_voltage_notify(self, client: BleakClient) -> None:
+        try:
+            await self._start_notify(client)
+        except Exception as err:
+            _LOGGER.warning(
+                "Spanningsnotificatie niet gestart voor %s; temperatuur blijft "
+                "beschikbaar via GATT-read: %s",
+                self._address,
+                err,
+            )
 
     def _on_disconnect(self, _client: BleakClient) -> None:
         _LOGGER.info("CTEK %s verbroken", self._address)
@@ -147,10 +182,16 @@ class CTEKDevice:
                 _LOGGER.info("Verbonden met CTEK %s", self._address)
 
                 await self._authenticate(client)
-                await self._start_notify(client)
+                await self._start_voltage_notify(client)
 
                 while client.is_connected:
-                    await asyncio.sleep(5)
+                    await self._read_temperature(client)
+                    for _ in range(
+                        TEMPERATURE_READ_INTERVAL // CONNECTION_CHECK_INTERVAL
+                    ):
+                        if not client.is_connected:
+                            break
+                        await asyncio.sleep(CONNECTION_CHECK_INTERVAL)
 
             except asyncio.CancelledError:
                 _LOGGER.debug("CTEKDevice loop gestopt")

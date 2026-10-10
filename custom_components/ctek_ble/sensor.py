@@ -4,7 +4,7 @@ import logging
 
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import UnitOfElectricPotential
+from homeassistant.const import UnitOfElectricPotential, UnitOfTemperature
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -27,6 +27,7 @@ async def async_setup_entry(
 
     async_add_entities([
         CTEKVoltageSensor(device, address, name),
+        CTEKTemperatureSensor(device, address, name),
         CTEKChargingSensor(device, address, name),
         CTEKBatteryStateSensor(device, address, name),
     ])
@@ -69,8 +70,22 @@ class CTEKVoltageSensor(BaseCTEKSensor):
         return self._device.voltage
 
 
+class CTEKTemperatureSensor(BaseCTEKSensor):
+    _attr_device_class = SensorDeviceClass.TEMPERATURE
+    _attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
+    _attr_suggested_display_precision = 0
+    _attr_name = "Temperature"
+
+    def __init__(self, device, address, name):
+        super().__init__(device, address, name, "temperature")
+
+    @property
+    def native_value(self) -> int | None:
+        return self._device.temperature
+
+
 class CTEKChargingSensor(BaseCTEKSensor):
-    _attr_name = "Charging"
+    _attr_name = "Charging estimate"
 
     def __init__(self, device, address, name):
         super().__init__(device, address, name, "charging")
@@ -84,7 +99,7 @@ class CTEKChargingSensor(BaseCTEKSensor):
 
 
 class CTEKBatteryStateSensor(BaseCTEKSensor):
-    _attr_name = "Battery State"
+    _attr_name = "Battery State estimate"
 
     def __init__(self, device, address, name):
         super().__init__(device, address, name, "battery_state")

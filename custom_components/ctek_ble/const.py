@@ -6,6 +6,7 @@ DOMAIN = "ctek_ble"
 # backward compatibility while allowing a broader set of valid identifiers.
 SERVICE_UUID = "812ca8ed-a177-4d74-aefa-70098c5416af"
 CHAR_UUID = "a337b4eb-2544-4f94-87c9-f7732e5fe250"
+TEMPERATURE_CHARACTERISTIC_UUID = "b5634099-97c4-4f37-adf3-771246e77754"
 UNLOCK_CHARACTERISTIC_UUID = "a1d67c01-fe3f-01bf-7d49-7dbdc43b02a6"
 
 SERVICE_UUIDS = [

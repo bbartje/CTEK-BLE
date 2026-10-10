@@ -1,5 +1,6 @@
 import hashlib
 import logging
+import math
 
 _LOGGER = logging.getLogger(__name__)
 _SENDER_ID_PREFIX = bytes.fromhex("e1da7195eced40e4bc16559e9de73ba4")
@@ -24,11 +25,31 @@ def build_sender_unlock_payload(sender_id: str) -> bytes:
 
 
 def parse_data(data: bytes | bytearray) -> float | None:
+    sample = parse_voltage_sample(data)
+    if sample is None:
+        return None
+
+    voltage, _auxiliary = sample
+    return voltage
+
+
+def parse_voltage_sample(data: bytes | bytearray) -> tuple[float, int] | None:
     if not data or len(data) < 3 or len(data) % 3:
         _LOGGER.debug("Ongeldige payload (%d bytes): %s", len(data), bytes(data).hex())
         return None
 
     payload = bytes(data[-3:])
     voltage = int.from_bytes(payload[0:2], "little") / 2048
-    _LOGGER.debug("Parsed: %.2fV  (raw: %s)", voltage, payload.hex())
-    return voltage
+    auxiliary = int.from_bytes(payload[2:3], "little", signed=True)
+    _LOGGER.debug(
+        "Parsed: %.2fV (aux=%d, raw=%s)", voltage, auxiliary, payload.hex()
+    )
+    return voltage, auxiliary
+
+
+def parse_temperature(data: bytes | bytearray) -> int | None:
+    if not data:
+        return None
+
+    raw_temperature = int.from_bytes(data[:1], "little", signed=True)
+    return math.floor(raw_temperature / 2 + 0.5)

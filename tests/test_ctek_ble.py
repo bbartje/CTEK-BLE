@@ -10,6 +10,8 @@ from custom_components.ctek_ble.protocol import (
     build_sender_unlock_payload,
     normalize_sender_id,
     parse_data,
+    parse_temperature,
+    parse_voltage_sample,
 )
 
 
@@ -28,7 +30,15 @@ def test_parse_data_returns_latest_voltage_from_three_byte_records():
     payload = bytes((0x00, 0x30, 0x01, 0x00, 0xC8, 0x02))
 
     assert parse_data(payload) == 25.0
+    assert parse_voltage_sample(payload) == (25.0, 2)
     assert parse_data(bytes((0x00, 0x30, 0x01, 0x00))) is None
+
+
+def test_parse_temperature_uses_signed_half_degrees_and_app_rounding():
+    assert parse_temperature(bytes((0x05,))) == 3
+    assert parse_temperature(bytes((0xFB,))) == -2
+    assert parse_temperature(bytes((0xFA,))) == -3
+    assert parse_temperature(b"") is None
 
 
 def test_sender_id_unlock_payload_matches_app_handshake():
@@ -68,12 +78,52 @@ def test_sender_id_unlock_is_written_before_notify():
     assert calls[1] == ("notify", "a337b4eb-2544-4f94-87c9-f7732e5fe250")
 
 
+def test_temperature_read_updates_device_value():
+    device = CTEKDevice(
+        SimpleNamespace(address="AA:BB:CC:DD:EE:FF"), "0123456789ABCDEF"
+    )
+
+    class MockClient:
+        async def read_gatt_char(self, uuid):
+            assert uuid == "b5634099-97c4-4f37-adf3-771246e77754"
+            return bytes((0x32,))
+
+    asyncio.run(device._read_temperature(MockClient()))
+
+    assert device.temperature == 25
+    assert device.available is True
+
+
+def test_voltage_notify_failure_does_not_escape_connection_session():
+    device = CTEKDevice(
+        SimpleNamespace(address="AA:BB:CC:DD:EE:FF"), "0123456789ABCDEF"
+    )
+
+    async def fail_notify(_client):
+        raise RuntimeError("notify unavailable")
+
+    device._start_notify = fail_notify
+
+    asyncio.run(device._start_voltage_notify(SimpleNamespace()))
+
+
 def test_sender_id_unlock_payload_requires_sixteen_ascii_characters():
     with pytest.raises(ValueError):
         build_sender_unlock_payload("too-short")
 
     with pytest.raises(ValueError):
         build_sender_unlock_payload("0123456789ABCDEé")
+
+
+def test_voltage_notification_keeps_signed_auxiliary_byte():
+    device = CTEKDevice(
+        SimpleNamespace(address="AA:BB:CC:DD:EE:FF"), "0123456789ABCDEF"
+    )
+
+    device._on_notify(0, bytearray((0x00, 0xC8, 0xFE)))
+
+    assert device.voltage == 25.0
+    assert device.voltage_auxiliary == -2
 
 
 def test_start_notify_failure_includes_discovered_gatt_details():
